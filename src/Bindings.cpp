@@ -1,8 +1,8 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-#include "gqlmapi/include/Bindings.h"
-#include "gqlmapi/src/lib.rs.h"
+#include "gqlmapi_rs/include/Bindings.h"
+#include "gqlmapi_rs/src/lib.rs.h"
 
 #include "MAPIGraphQL.h"
 

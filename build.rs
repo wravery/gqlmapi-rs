@@ -54,9 +54,7 @@ fn main() -> io::Result<()> {
         .include(vcpkg_include)
         .flag_if_supported("/std:c++17")
         .flag_if_supported("/EHsc")
-        .compile("gqlmapi");
-
-    println!("cargo:rustc-cdylib-link-arg=libgqlmapi.a");
+        .compile("gqlmapi_rs");
 
     Ok(())
 }

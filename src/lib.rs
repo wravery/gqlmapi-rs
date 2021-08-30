@@ -6,7 +6,7 @@ mod ffi {
     }
 
     unsafe extern "C++" {
-        include!("gqlmapi/include/Bindings.h");
+        include!("gqlmapi_rs/include/Bindings.h");
 
         type Bindings;
 
