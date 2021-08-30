@@ -1,0 +1,3 @@
+[submodule "gqlmapi"]
+	path = gqlmapi
+	url = https://github.com/microsoft/gqlmapi
