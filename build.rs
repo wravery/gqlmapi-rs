@@ -48,7 +48,7 @@ fn main() -> io::Result<()> {
     let mut vcpkg_include = vcpkg_installed.clone();
     vcpkg_include.push("include");
 
-    cxx_build::bridge("src/lib.rs")
+    cxx_build::bridge("src/bindings.rs")
         .file("src/Bindings.cpp")
         .include(gqlmapi_include)
         .include(vcpkg_include)

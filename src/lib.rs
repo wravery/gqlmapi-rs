@@ -1,64 +1,68 @@
-#[cxx::bridge]
-mod ffi {
-    extern "Rust" {
-        type NextContext;
-        type CompleteContext;
-    }
-
-    unsafe extern "C++" {
-        include!("gqlmapi_rs/include/Bindings.h");
-
-        type Bindings;
-
-        fn make_bindings() -> UniquePtr<Bindings>;
-
-        fn startService(&self, useDefaultProfile: bool);
-        fn stopService(&self);
-
-        fn parseQuery(&self, query: &str) -> Result<i32>;
-        fn discardQuery(&self, queryId: i32);
-
-        fn subscribe(
-            &self,
-            queryId: i32,
-            operationName: &str,
-            variables: &str,
-            nextContext: Box<NextContext>,
-            nextCallback: fn(Box<NextContext>, String) -> Box<NextContext>,
-            completeContext: Box<CompleteContext>,
-            completeCallback: fn(Box<CompleteContext>),
-        ) -> Result<i32>;
-        fn unsubscribe(&self, subscriptionId: i32);
-    }
-}
-
-pub struct NextContext(Box<dyn FnMut(String)>);
-
-pub struct CompleteContext(Box<dyn FnOnce()>);
+mod bindings;
+use bindings::{ffi, CompleteContext, NextContext};
 
 pub struct MAPIGraphQL(cxx::UniquePtr<ffi::Bindings>);
 
 impl MAPIGraphQL {
+    /// Create a new instance of [MAPIGraphQL].
     pub fn new() -> Self {
         Self(ffi::make_bindings())
     }
 
+    /// Start the [GraphQL](https://graphql.org) service and log on to the `MAPI` session. You can
+    /// explicitly call [MAPIGraphQL::stop_service] when you're done, or you can let the service
+    /// clean itself up when the [MAPIGraphQL] `struct` is dropped.
     pub fn start_service(&self, use_default_profile: bool) {
         self.bindings().startService(use_default_profile)
     }
 
+    /// Shutdown the [GraphQL](https://graphql.org) service log off from the `MAPI` session. This
+    /// is a no-op if you have not previously called [MAPIGraphQL::start_service]. It will also
+    /// stop automatically when the [MAPIGraphQL] `struct` is dropped.
     pub fn stop_service(&self) {
         self.bindings().stopService()
     }
 
-    pub fn parse_query(&self, query: &str) -> Result<i32, cxx::Exception> {
-        self.bindings().parseQuery(query)
+    /// Parse a [GraphQL](https://graphql.org) request document and return an `i32` `query_id` that
+    /// can be used to represent the request in 1 or more calls to [MAPIGraphQL::subscribe]. You
+    /// should explicitly call [MAPIGraphQL::discard_query] with the `query_id` when you are
+    /// finished, but if you want to implement automatic query caching, save the `query_id` and
+    /// reuse it later.
+    ///
+    /// If the request document cannot be parsed, it will return an [Err(String)].
+    ///
+    /// All previously parsed documents will be discarded automatically when the [MAPIGraphQL]
+    /// `struct` is dropped.
+    pub fn parse_query(&self, query: &str) -> Result<i32, String> {
+        self.bindings()
+            .parseQuery(query)
+            .map_err(|exception| exception.what().into())
     }
 
+    /// Cleanup a [GraphQL](https://graphql.org) request document that was previously parsed with
+    /// [MAPIGraphQL::parse_query].
+    ///
+    /// All previously parsed documents will be discarded automatically when the [MAPIGraphQL]
+    /// `struct` is dropped.
     pub fn discard_query(&self, query_id: i32) {
         self.bindings().discardQuery(query_id)
     }
 
+    /// Subscribe to a [GraphQL](https://graphql.org) request document that was previously parsed
+    /// with [MAPIGraphQL::parse_query]. This will return an [Err(String)] if the request
+    /// failed, including if you have not called [MAPIGraphQL::start_service] yet.
+    ///
+    /// If the specified operation is a `Query` or `Mutation`, it will be evaluated immediately and
+    /// result in a pair of calls to `next` and then `complete`. `Query` and `Mutation`
+    /// operations do not hold on to any state after the immediate results are delivered, so
+    /// calling [MAPIGraphQL::unsubscribe] is a no-op.
+    ///
+    /// If it is a `Subscription`, each time the event stream is updated, the payload will be
+    /// delivered through another call to `next`. `Subscription` operations will also invoke
+    /// `complete` once they are removed with a call to [MAPIGraphQL::unsubscribe]. You must
+    /// call [MAPIGraphQL::unsubscribe] to stop receiving `Subscription` events, although any
+    /// current `Subscription` requests will be automatically unsubscribed when the [MAPIGraphQL]
+    /// `struct` is dropped.
     pub fn subscribe(
         &self,
         query_id: i32,
@@ -66,21 +70,29 @@ impl MAPIGraphQL {
         variables: &str,
         next: Box<dyn FnMut(String)>,
         complete: Box<dyn FnOnce()>,
-    ) -> Result<i32, cxx::Exception> {
-        self.bindings().subscribe(
-            query_id,
-            operation_name,
-            variables,
-            Box::new(NextContext(next)),
-            |mut context, payload| {
-                context.0(payload);
-                context
-            },
-            Box::new(CompleteContext(complete)),
-            |context| context.0(),
-        )
+    ) -> Result<i32, String> {
+        self.bindings()
+            .subscribe(
+                query_id,
+                operation_name,
+                variables,
+                Box::new(NextContext(next)),
+                |mut context, payload| {
+                    context.0(payload);
+                    context
+                },
+                Box::new(CompleteContext(complete)),
+                |context| context.0(),
+            )
+            .map_err(|exception| exception.what().into())
     }
 
+    /// Cleanup a `Subscription` that was previously created with [MAPIGraphQL::subscribe].
+    ///
+    /// This is a no-op for `Query` or `Mutation` requests since they deliver 1 immediate result.
+    ///
+    /// All current `Subscription` requests will be unsubscribed automatically when the
+    /// [MAPIGraphQL] `struct` is dropped.
     pub fn unsubscribe(&self, subscription_id: i32) {
         self.bindings().unsubscribe(subscription_id)
     }
