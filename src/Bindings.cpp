@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 #include "gqlmapi_rs/include/Bindings.h"
-#include "gqlmapi_rs/src/lib.rs.h"
+#include "gqlmapi_rs/src/bindings.rs.h"
 
 #include "MAPIGraphQL.h"
 
