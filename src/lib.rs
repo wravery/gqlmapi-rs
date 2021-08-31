@@ -1,6 +1,7 @@
 mod bindings;
 use bindings::{ffi, CompleteContext, NextContext};
 
+/// Rust-friendly bindings to [gqlmapi](https://github.com/microsoft/gqlmapi).
 pub struct MAPIGraphQL(cxx::UniquePtr<ffi::Bindings>);
 
 impl MAPIGraphQL {
@@ -10,26 +11,26 @@ impl MAPIGraphQL {
     }
 
     /// Start the [GraphQL](https://graphql.org) service and log on to the `MAPI` session. You can
-    /// explicitly call [MAPIGraphQL::stop_service] when you're done, or you can let the service
+    /// explicitly call [stop_service](MAPIGraphQL::stop_service) when you're done, or you can let the service
     /// clean itself up when the [MAPIGraphQL] `struct` is dropped.
     pub fn start_service(&self, use_default_profile: bool) {
         self.bindings().startService(use_default_profile)
     }
 
     /// Shutdown the [GraphQL](https://graphql.org) service log off from the `MAPI` session. This
-    /// is a no-op if you have not previously called [MAPIGraphQL::start_service]. It will also
+    /// is a no-op if you have not previously called [start_service](MAPIGraphQL::start_service). It will also
     /// stop automatically when the [MAPIGraphQL] `struct` is dropped.
     pub fn stop_service(&self) {
         self.bindings().stopService()
     }
 
     /// Parse a [GraphQL](https://graphql.org) request document and return an `i32` `query_id` that
-    /// can be used to represent the request in 1 or more calls to [MAPIGraphQL::subscribe]. You
-    /// should explicitly call [MAPIGraphQL::discard_query] with the `query_id` when you are
+    /// can be used to represent the request in 1 or more calls to [subscribe](MAPIGraphQL::subscribe). You
+    /// should explicitly call [discard_query](MAPIGraphQL::discard_query) with the `query_id` when you are
     /// finished, but if you want to implement automatic query caching, save the `query_id` and
     /// reuse it later.
     ///
-    /// If the request document cannot be parsed, it will return an [Err(String)].
+    /// If the request document cannot be parsed, it will return an [Err(String)](Err).
     ///
     /// All previously parsed documents will be discarded automatically when the [MAPIGraphQL]
     /// `struct` is dropped.
@@ -40,7 +41,7 @@ impl MAPIGraphQL {
     }
 
     /// Cleanup a [GraphQL](https://graphql.org) request document that was previously parsed with
-    /// [MAPIGraphQL::parse_query].
+    /// [parse_query](MAPIGraphQL::parse_query).
     ///
     /// All previously parsed documents will be discarded automatically when the [MAPIGraphQL]
     /// `struct` is dropped.
@@ -49,18 +50,18 @@ impl MAPIGraphQL {
     }
 
     /// Subscribe to a [GraphQL](https://graphql.org) request document that was previously parsed
-    /// with [MAPIGraphQL::parse_query]. This will return an [Err(String)] if the request
-    /// failed, including if you have not called [MAPIGraphQL::start_service] yet.
+    /// with [parse_query](MAPIGraphQL::parse_query). This will return an [Err(String)](Err) if the request
+    /// failed, including if you have not called [start_service](MAPIGraphQL::start_service) yet.
     ///
     /// If the specified operation is a `Query` or `Mutation`, it will be evaluated immediately and
     /// result in a pair of calls to `next` and then `complete`. `Query` and `Mutation`
     /// operations do not hold on to any state after the immediate results are delivered, so
-    /// calling [MAPIGraphQL::unsubscribe] is a no-op.
+    /// calling [unsubscribe](MAPIGraphQL::unsubscribe) is a no-op.
     ///
     /// If it is a `Subscription`, each time the event stream is updated, the payload will be
     /// delivered through another call to `next`. `Subscription` operations will also invoke
-    /// `complete` once they are removed with a call to [MAPIGraphQL::unsubscribe]. You must
-    /// call [MAPIGraphQL::unsubscribe] to stop receiving `Subscription` events, although any
+    /// `complete` once they are removed with a call to [unsubscribe](MAPIGraphQL::unsubscribe). You must
+    /// call [unsubscribe](MAPIGraphQL::unsubscribe) to stop receiving `Subscription` events, although any
     /// current `Subscription` requests will be automatically unsubscribed when the [MAPIGraphQL]
     /// `struct` is dropped.
     pub fn subscribe(
@@ -87,7 +88,7 @@ impl MAPIGraphQL {
             .map_err(|exception| exception.what().into())
     }
 
-    /// Cleanup a `Subscription` that was previously created with [MAPIGraphQL::subscribe].
+    /// Cleanup a `Subscription` that was previously created with [subscribe](MAPIGraphQL::subscribe).
     ///
     /// This is a no-op for `Query` or `Mutation` requests since they deliver 1 immediate result.
     ///
