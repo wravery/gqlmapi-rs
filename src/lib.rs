@@ -3,7 +3,7 @@ use std::rc::Rc;
 mod bindings;
 use bindings::{ffi, CompleteContext, NextContext};
 
-/// Hold the [Bindings](ffi::Bindings) object and automatically clean up when [Service] drops.
+/// Hold the `Bindings` object and automatically clean up when [Service] drops.
 struct Service(cxx::UniquePtr<ffi::Bindings>);
 
 impl Service {
