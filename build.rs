@@ -54,7 +54,7 @@ fn main() -> io::Result<()> {
         .include(vcpkg_include)
         .flag_if_supported("/std:c++17")
         .flag_if_supported("/EHsc")
-        .compile("gqlmapi_rs");
+        .compile("gqlmapi-rs");
 
     Ok(())
 }

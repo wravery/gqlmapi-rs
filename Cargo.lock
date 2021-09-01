@@ -72,7 +72,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gqlmapi_rs"
+name = "gqlmapi-rs"
 version = "0.1.0"
 dependencies = [
  "cmake",

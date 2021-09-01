@@ -6,7 +6,7 @@ pub mod ffi {
     }
 
     unsafe extern "C++" {
-        include!("gqlmapi_rs/include/Bindings.h");
+        include!("gqlmapi-rs/include/Bindings.h");
 
         type Bindings;
 
