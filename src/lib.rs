@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 mod bindings;
 use bindings::{ffi, CompleteContext, NextContext};
@@ -7,8 +7,8 @@ use bindings::{ffi, CompleteContext, NextContext};
 struct Service(cxx::UniquePtr<ffi::Bindings>);
 
 impl Service {
-    fn new(use_default_profile: bool) -> Rc<Self> {
-        let instance = Rc::new(Self(ffi::make_bindings()));
+    fn new(use_default_profile: bool) -> Arc<Self> {
+        let instance = Arc::new(Self(ffi::make_bindings()));
         instance.bindings().startService(use_default_profile);
         instance
     }
@@ -26,7 +26,7 @@ impl Drop for Service {
 }
 
 /// Rust-friendly bindings to [gqlmapi](https://github.com/microsoft/gqlmapi).
-pub struct MAPIGraphQL(Rc<Service>);
+pub struct MAPIGraphQL(Arc<Service>);
 
 impl MAPIGraphQL {
     /// Start the [GraphQL](https://graphql.org) service and log on to the `MAPI` session.
@@ -64,7 +64,7 @@ impl MAPIGraphQL {
 
 /// Hold on to a query parsed with [parse_query](MAPIGraphQL::parse_query) and automatically clean
 /// up when [ParsedQuery] drops.
-pub struct ParsedQuery(Rc<Service>, i32);
+pub struct ParsedQuery(Arc<Service>, i32);
 
 impl Drop for ParsedQuery {
     /// Cleanup a [GraphQL](https://graphql.org) request document that was previously parsed with
