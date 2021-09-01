@@ -1,5 +1,5 @@
 use std::{
-    sync::{mpsc, Arc},
+    sync::{mpsc, Arc, Mutex, PoisonError},
     thread::{self, JoinHandle},
 };
 
@@ -24,7 +24,7 @@ enum ServiceCommand {
 /// Hold the `Bindings` object and automatically clean up when [Service] drops.
 struct Service {
     worker: Option<JoinHandle<Result<(), String>>>,
-    sender: mpsc::Sender<ServiceCommand>,
+    sender: Mutex<mpsc::Sender<ServiceCommand>>,
 }
 
 impl Service {
@@ -83,12 +83,14 @@ impl Service {
 
                 Ok(())
             })),
-            sender: tx,
+            sender: Mutex::new(tx),
         })
     }
 
     fn stop(&mut self) -> Result<(), String> {
         self.sender
+            .lock()
+            .map_err(map_lock_error)?
             .send(ServiceCommand::Stop)
             .map_err(map_send_error)?;
 
@@ -127,6 +129,8 @@ impl MAPIGraphQL {
         let (tx, rx) = mpsc::channel();
         self.0
             .sender
+            .lock()
+            .map_err(map_lock_error)?
             .send(ServiceCommand::ParsedQuery(String::from(query), tx))
             .map_err(map_send_error)?;
         let result = rx.recv().map_err(map_recv_error)?;
@@ -154,14 +158,26 @@ impl MAPIGraphQL {
 /// up when [ParsedQuery] drops.
 pub struct ParsedQuery(Arc<Service>, i32);
 
+impl ParsedQuery {
+    fn discard_query(&mut self) -> Result<(), String> {
+        if self.1 != 0 {
+            self.0
+                .sender
+                .lock()
+                .map_err(map_lock_error)?
+                .send(ServiceCommand::DiscardQuery(self.1))
+                .map_err(map_send_error)?;
+            self.1 = 0;
+        }
+        Ok(())
+    }
+}
+
 impl Drop for ParsedQuery {
     /// Cleanup a [GraphQL](https://graphql.org) request document that was previously parsed with
     /// [parse_query](MAPIGraphQL::parse_query).
     fn drop(&mut self) {
-        self.0
-            .sender
-            .send(ServiceCommand::DiscardQuery(self.1))
-            .expect("Unable to discard query");
+        self.discard_query().expect("Unable to discard query");
     }
 }
 
@@ -196,6 +212,8 @@ impl<'a> Subscription<'a> {
         self.query
             .0
             .sender
+            .lock()
+            .map_err(map_lock_error)?
             .send(ServiceCommand::Subscribe(
                 self.query.1,
                 self.operation_name.clone(),
@@ -216,6 +234,8 @@ impl<'a> Subscription<'a> {
             self.query
                 .0
                 .sender
+                .lock()
+                .map_err(map_lock_error)?
                 .send(ServiceCommand::Unsubscribe(self.subscription_id))
                 .map_err(map_send_error)?;
             self.subscription_id = 0;
@@ -231,6 +251,10 @@ impl<'a> Drop for Subscription<'a> {
     fn drop(&mut self) {
         self.unsubscribe().expect("Unable to unsubscribe");
     }
+}
+
+fn map_lock_error<T>(err: PoisonError<T>) -> String {
+    format!("Error locking mutex: {}", err)
 }
 
 fn map_send_error<T>(err: mpsc::SendError<T>) -> String {
