@@ -26,6 +26,7 @@ impl Drop for Service {
 }
 
 /// Rust-friendly bindings to [gqlmapi](https://github.com/microsoft/gqlmapi).
+#[derive(Clone)]
 pub struct MAPIGraphQL(Rc<Service>);
 
 impl MAPIGraphQL {
@@ -46,43 +47,25 @@ impl MAPIGraphQL {
     }
 
     /// Subscribe to a [GraphQL](https://graphql.org) [ParsedQuery] that was previously parsed with
-    /// [parse_query](MAPIGraphQL::parse_query). This will return an [Err(String)](Err) if the
-    /// request failed.
-    ///
-    /// If the specified operation is a `Query` or `Mutation`, it will be evaluated immediately and
-    /// result in a pair of calls to `next` and then `complete`.
-    ///
-    /// If it is a `Subscription` operation, each time the event stream is updated, the payload
-    /// will be delivered through another call to `next`. `Subscription` operations will also
-    /// invoke `complete` once they are removed by dropping the [Subscription].
+    /// [parse_query](MAPIGraphQL::parse_query).
     pub fn subscribe(
         &self,
         query: &ParsedQuery,
         operation_name: &str,
         variables: &str,
-        next: Box<dyn FnMut(String)>,
-        complete: Box<dyn FnOnce()>,
-    ) -> Result<Subscription, String> {
-        match self.0.bindings().subscribe(
-            query.1,
-            operation_name,
-            variables,
-            Box::new(NextContext(next)),
-            |mut context, payload| {
-                context.0(payload);
-                context
-            },
-            Box::new(CompleteContext(complete)),
-            |context| context.0(),
-        ) {
-            Ok(subscription_id) => Ok(Subscription(self.0.clone(), subscription_id)),
-            Err(exception) => Err(exception.what().into()),
+    ) -> Subscription {
+        Subscription {
+            subscription_id: 0,
+            query: query.clone(),
+            operation_name: operation_name.into(),
+            variables: variables.into(),
         }
     }
 }
 
 /// Hold on to a query parsed with [parse_query](MAPIGraphQL::parse_query) and automatically clean
 /// up when [ParsedQuery] drops.
+#[derive(Clone)]
 pub struct ParsedQuery(Rc<Service>, i32);
 
 impl Drop for ParsedQuery {
@@ -93,16 +76,69 @@ impl Drop for ParsedQuery {
     }
 }
 
-/// Hold on to an operation subscription created with [subscribe](MAPIGraphQL::subscribe) and
+/// Hold on to an operation subscription created with [subscribe](Subscription::subscribe) and
 /// automatically clean up when [Subscription] drops..
-pub struct Subscription(Rc<Service>, i32);
+#[derive(Clone)]
+pub struct Subscription {
+    subscription_id: i32,
+    query: ParsedQuery,
+    operation_name: String,
+    variables: String,
+}
+
+impl Subscription {
+    /// Start listening to the [Subscription] that was previously created with
+    /// [subscribe](MAPIGraphQL::subscribe). This will return an [Err(String)](Err) if the
+    /// request failed.
+    ///
+    /// If the specified operation is a `Query` or `Mutation`, it will be evaluated immediately and
+    /// result in a pair of calls to `next` and then `complete`.
+    ///
+    /// If it is a `Subscription` operation, each time the event stream is updated, the payload
+    /// will be delivered through another call to `next`. `Subscription` operations will also
+    /// invoke `complete` once they are removed by dropping the [Subscription].
+    pub fn listen(
+        &mut self,
+        next: Box<dyn FnMut(String)>,
+        complete: Box<dyn FnOnce()>,
+    ) -> Result<(), String> {
+        self.unsubscribe();
+
+        self.subscription_id = self
+            .query
+            .0
+            .bindings()
+            .subscribe(
+                self.query.1,
+                &self.operation_name,
+                &self.variables,
+                Box::new(NextContext(next)),
+                |mut context, payload| {
+                    context.0(payload);
+                    context
+                },
+                Box::new(CompleteContext(complete)),
+                |context| context.0(),
+            )
+            .map_err(|exception| String::from(exception.what()))?;
+
+        Ok(())
+    }
+
+    fn unsubscribe(&mut self) {
+        if self.subscription_id != 0 {
+            self.query.0.bindings().unsubscribe(self.subscription_id);
+            self.subscription_id = 0;
+        }
+    }
+}
 
 impl Drop for Subscription {
     /// Cleanup a `Subscription` that was previously created with [subscribe](MAPIGraphQL::subscribe).
     ///
     /// This is a no-op for `Query` or `Mutation` requests since they deliver 1 immediate result.
     fn drop(&mut self) {
-        self.0.bindings().unsubscribe(self.1)
+        self.unsubscribe();
     }
 }
 
@@ -170,13 +206,11 @@ mod test {
             .expect("parses the introspection query");
         assert_ne!(0, query.1, "query ID is not 0");
 
+        let mut subscription = gqlmapi.subscribe(&query, "", "");
         let (tx_next, rx_next) = mpsc::channel();
         let (tx_complete, rx_complete) = mpsc::channel();
-        let subscription = gqlmapi
-            .subscribe(
-                &query,
-                "",
-                "",
+        subscription
+            .listen(
                 Box::new(move |payload| {
                     tx_next
                         .send(
@@ -188,7 +222,7 @@ mod test {
                 Box::new(move || tx_complete.send(()).expect("channel should always send")),
             )
             .expect("subscribes to the query");
-        assert_ne!(subscription.1, 0, "subscription ID is not 0");
+        assert_ne!(subscription.subscription_id, 0, "subscription ID is not 0");
         let results = rx_next.recv().expect("should always receive a payload");
         rx_complete.recv().expect("should always call complete");
 

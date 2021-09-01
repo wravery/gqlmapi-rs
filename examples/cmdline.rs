@@ -1,7 +1,11 @@
 extern crate gqlmapi_rs;
 use gqlmapi_rs::MAPIGraphQL;
 
-use std::{io::{self, Read}, string::FromUtf8Error, sync::mpsc::{self, RecvError}};
+use std::{
+    io::{self, Read},
+    string::FromUtf8Error,
+    sync::mpsc::{self, RecvError},
+};
 
 #[derive(Debug)]
 enum Error {
@@ -26,13 +30,13 @@ fn execute_query(query: String) -> Result<String, Error> {
     let query = gqlmapi.parse_query(&query).map_err(Error::GraphQL)?;
     let (tx_next, rx_next) = mpsc::channel();
     let (tx_complete, rx_complete) = mpsc::channel();
-    let _subscription = gqlmapi.subscribe(
-        &query,
-        "",
-        "",
-        Box::new(move |payload| tx_next.send(payload).expect("send next payload")),
-        Box::new(move || tx_complete.send(()).expect("send complete")),
-    ).map_err(Error::GraphQL)?;
+    let mut subscription = gqlmapi.subscribe(&query, "", "");
+    subscription
+        .listen(
+            Box::new(move |payload| tx_next.send(payload).expect("send next payload")),
+            Box::new(move || tx_complete.send(()).expect("send complete")),
+        )
+        .map_err(Error::GraphQL)?;
     let results = rx_next.recv().map_err(Error::Channel)?;
     rx_complete.recv().map_err(Error::Channel)?;
 
