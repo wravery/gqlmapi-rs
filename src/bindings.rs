@@ -18,6 +18,7 @@ pub mod ffi {
         fn parseQuery(&self, query: &str) -> Result<i32>;
         fn discardQuery(&self, queryId: i32);
 
+        #[allow(clippy::too_many_arguments)]
         fn subscribe(
             &self,
             queryId: i32,
