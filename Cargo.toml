@@ -8,8 +8,12 @@ license = "MIT"
 keywords = ["MAPI", "GraphQL", "gqlmapi"]
 categories = ["os::windows-apis"]
 
+[features]
+"crt-static" = ["cxx/crt-static"]
+default = ["crt-static"]
+
 [dependencies]
-cxx = "1.0.54"
+cxx = { git = "https://github.com/wravery/cxx" }
 
 [build-dependencies]
 cmake = "0.1.45"
