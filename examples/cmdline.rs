@@ -32,10 +32,7 @@ fn execute_query(query: String) -> Result<String, Error> {
     let (tx_complete, rx_complete) = mpsc::channel();
     let mut subscription = gqlmapi.subscribe(&query, "", "");
     subscription
-        .listen(
-            Box::new(move |payload| tx_next.send(payload).expect("send next payload")),
-            Box::new(move || tx_complete.send(()).expect("send complete")),
-        )
+        .listen(tx_next, tx_complete)
         .map_err(Error::GraphQL)?;
     let results = rx_next.recv().map_err(Error::Channel)?;
     rx_complete.recv().map_err(Error::Channel)?;

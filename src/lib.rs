@@ -1,27 +1,112 @@
-use std::sync::Arc;
+use std::{
+    sync::{mpsc, Arc},
+    thread::{self, JoinHandle},
+};
 
 mod bindings;
 use bindings::{ffi, CompleteContext, NextContext};
 
+enum ServiceCommand {
+    Stop,
+    ParsedQuery(String, mpsc::Sender<Result<i32, String>>),
+    DiscardQuery(i32),
+    Subscribe(
+        i32,
+        String,
+        String,
+        mpsc::Sender<String>,
+        mpsc::Sender<()>,
+        mpsc::Sender<Result<i32, String>>,
+    ),
+    Unsubscribe(i32),
+}
+
 /// Hold the `Bindings` object and automatically clean up when [Service] drops.
-struct Service(cxx::UniquePtr<ffi::Bindings>);
+struct Service {
+    worker: Option<JoinHandle<Result<(), String>>>,
+    sender: mpsc::Sender<ServiceCommand>,
+}
 
 impl Service {
     fn new(use_default_profile: bool) -> Arc<Self> {
-        let instance = Arc::new(Self(ffi::make_bindings()));
-        instance.bindings().startService(use_default_profile);
-        instance
+        let (tx, rx) = mpsc::channel();
+        Arc::new(Service {
+            worker: Some(thread::spawn(move || {
+                let bindings = ffi::make_bindings();
+                bindings.startService(use_default_profile);
+
+                loop {
+                    match rx.recv().map_err(map_recv_error)? {
+                        ServiceCommand::Stop => {
+                            bindings.stopService();
+                            break;
+                        }
+                        ServiceCommand::ParsedQuery(query, tx_result) => tx_result
+                            .send(bindings.parseQuery(&query).map_err(map_exception))
+                            .map_err(map_send_error)?,
+                        ServiceCommand::DiscardQuery(query_id) => bindings.discardQuery(query_id),
+                        ServiceCommand::Subscribe(
+                            query_id,
+                            operation_name,
+                            variables,
+                            tx_next,
+                            tx_complete,
+                            tx_result,
+                        ) => {
+                            let next_context = Box::new(NextContext(Box::new(move |payload| {
+                                tx_next.send(payload).expect("Error sending next payload")
+                            })));
+                            let complete_context = Box::new(CompleteContext(Box::new(move || {
+                                tx_complete.send(()).expect("Error sending complete")
+                            })));
+                            let subscription_id = bindings
+                                .subscribe(
+                                    query_id,
+                                    &operation_name,
+                                    &variables,
+                                    next_context,
+                                    |mut context, payload| {
+                                        context.0(payload);
+                                        context
+                                    },
+                                    complete_context,
+                                    |context| context.0(),
+                                )
+                                .map_err(map_exception);
+                            tx_result.send(subscription_id).map_err(map_send_error)?
+                        }
+                        ServiceCommand::Unsubscribe(subscription_id) => {
+                            bindings.unsubscribe(subscription_id)
+                        }
+                    }
+                }
+
+                Ok(())
+            })),
+            sender: tx,
+        })
     }
 
-    fn bindings(&self) -> &ffi::Bindings {
-        self.0.as_ref().expect("should always be non-null")
+    fn stop(&mut self) -> Result<(), String> {
+        self.sender
+            .send(ServiceCommand::Stop)
+            .map_err(map_send_error)?;
+
+        if let Some(worker) = self.worker.take() {
+            let result = worker
+                .join()
+                .map_err(|_| String::from("Error joining the worker"))?;
+            result?;
+        }
+
+        Ok(())
     }
 }
 
 impl Drop for Service {
     /// Shutdown the [GraphQL](https://graphql.org) service log off from the `MAPI` session.
     fn drop(&mut self) {
-        self.0.stopService();
+        self.stop().expect("Unable to stop the service");
     }
 }
 
@@ -39,10 +124,13 @@ impl MAPIGraphQL {
     ///
     /// If the request document cannot be parsed, it will return an [Err(String)](Err).
     pub fn parse_query(&self, query: &str) -> Result<ParsedQuery, String> {
-        match self.0.bindings().parseQuery(query) {
-            Ok(query_id) => Ok(ParsedQuery(self.0.clone(), query_id)),
-            Err(exception) => Err(exception.what().into()),
-        }
+        let (tx, rx) = mpsc::channel();
+        self.0
+            .sender
+            .send(ServiceCommand::ParsedQuery(String::from(query), tx))
+            .map_err(map_send_error)?;
+        let result = rx.recv().map_err(map_recv_error)?;
+        Ok(ParsedQuery(self.0.clone(), result?))
     }
 
     /// Subscribe to a [GraphQL](https://graphql.org) [ParsedQuery] that was previously parsed with
@@ -70,7 +158,10 @@ impl Drop for ParsedQuery {
     /// Cleanup a [GraphQL](https://graphql.org) request document that was previously parsed with
     /// [parse_query](MAPIGraphQL::parse_query).
     fn drop(&mut self) {
-        self.0.bindings().discardQuery(self.1)
+        self.0
+            .sender
+            .send(ServiceCommand::DiscardQuery(self.1))
+            .expect("Unable to discard query");
     }
 }
 
@@ -96,37 +187,40 @@ impl<'a> Subscription<'a> {
     /// invoke `complete` once they are removed by dropping the [Subscription].
     pub fn listen(
         &mut self,
-        next: Box<dyn FnMut(String)>,
-        complete: Box<dyn FnOnce()>,
+        next: mpsc::Sender<String>,
+        complete: mpsc::Sender<()>,
     ) -> Result<(), String> {
-        self.unsubscribe();
+        self.unsubscribe()?;
 
-        self.subscription_id = self
-            .query
+        let (tx, rx) = mpsc::channel();
+        self.query
             .0
-            .bindings()
-            .subscribe(
+            .sender
+            .send(ServiceCommand::Subscribe(
                 self.query.1,
-                &self.operation_name,
-                &self.variables,
-                Box::new(NextContext(next)),
-                |mut context, payload| {
-                    context.0(payload);
-                    context
-                },
-                Box::new(CompleteContext(complete)),
-                |context| context.0(),
-            )
-            .map_err(|exception| String::from(exception.what()))?;
+                self.operation_name.clone(),
+                self.variables.clone(),
+                next,
+                complete,
+                tx,
+            ))
+            .map_err(map_send_error)?;
+        let result = rx.recv().map_err(map_recv_error)?;
 
+        self.subscription_id = result?;
         Ok(())
     }
 
-    fn unsubscribe(&mut self) {
+    fn unsubscribe(&mut self) -> Result<(), String> {
         if self.subscription_id != 0 {
-            self.query.0.bindings().unsubscribe(self.subscription_id);
+            self.query
+                .0
+                .sender
+                .send(ServiceCommand::Unsubscribe(self.subscription_id))
+                .map_err(map_send_error)?;
             self.subscription_id = 0;
         }
+        Ok(())
     }
 }
 
@@ -135,8 +229,20 @@ impl<'a> Drop for Subscription<'a> {
     ///
     /// This is a no-op for `Query` or `Mutation` requests since they deliver 1 immediate result.
     fn drop(&mut self) {
-        self.unsubscribe();
+        self.unsubscribe().expect("Unable to unsubscribe");
     }
+}
+
+fn map_send_error<T>(err: mpsc::SendError<T>) -> String {
+    format!("Error sending message: {}", err)
+}
+
+fn map_recv_error(err: mpsc::RecvError) -> String {
+    format!("Error receiving message: {}", err)
+}
+
+fn map_exception(err: cxx::Exception) -> String {
+    String::from(err.what())
 }
 
 #[cfg(test)]
@@ -207,20 +313,12 @@ mod test {
         let (tx_next, rx_next) = mpsc::channel();
         let (tx_complete, rx_complete) = mpsc::channel();
         subscription
-            .listen(
-                Box::new(move |payload| {
-                    tx_next
-                        .send(
-                            serde_json::from_str::<IntrospectionResults>(&payload)
-                                .expect("payload should fit query"),
-                        )
-                        .expect("channel should always send")
-                }),
-                Box::new(move || tx_complete.send(()).expect("channel should always send")),
-            )
+            .listen(tx_next, tx_complete)
             .expect("subscribes to the query");
         assert_ne!(subscription.subscription_id, 0, "subscription ID is not 0");
         let results = rx_next.recv().expect("should always receive a payload");
+        let results = serde_json::from_str::<IntrospectionResults>(&results)
+            .expect("payload should fit query");
         rx_complete.recv().expect("should always call complete");
 
         let expected = IntrospectionResults {
