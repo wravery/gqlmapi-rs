@@ -26,7 +26,6 @@ impl Drop for Service {
 }
 
 /// Rust-friendly bindings to [gqlmapi](https://github.com/microsoft/gqlmapi).
-#[derive(Clone)]
 pub struct MAPIGraphQL(Rc<Service>);
 
 impl MAPIGraphQL {
@@ -48,15 +47,15 @@ impl MAPIGraphQL {
 
     /// Subscribe to a [GraphQL](https://graphql.org) [ParsedQuery] that was previously parsed with
     /// [parse_query](MAPIGraphQL::parse_query).
-    pub fn subscribe(
+    pub fn subscribe<'a>(
         &self,
-        query: &ParsedQuery,
+        query: &'a ParsedQuery,
         operation_name: &str,
         variables: &str,
-    ) -> Subscription {
+    ) -> Subscription<'a> {
         Subscription {
             subscription_id: 0,
-            query: query.clone(),
+            query,
             operation_name: operation_name.into(),
             variables: variables.into(),
         }
@@ -65,7 +64,6 @@ impl MAPIGraphQL {
 
 /// Hold on to a query parsed with [parse_query](MAPIGraphQL::parse_query) and automatically clean
 /// up when [ParsedQuery] drops.
-#[derive(Clone)]
 pub struct ParsedQuery(Rc<Service>, i32);
 
 impl Drop for ParsedQuery {
@@ -76,17 +74,16 @@ impl Drop for ParsedQuery {
     }
 }
 
-/// Hold on to an operation subscription created with [subscribe](Subscription::subscribe) and
+/// Hold on to an operation subscription created with [subscribe](MAPIGraphQL::subscribe) and
 /// automatically clean up when [Subscription] drops..
-#[derive(Clone)]
-pub struct Subscription {
+pub struct Subscription<'a> {
     subscription_id: i32,
-    query: ParsedQuery,
+    query: &'a ParsedQuery,
     operation_name: String,
     variables: String,
 }
 
-impl Subscription {
+impl<'a> Subscription<'a> {
     /// Start listening to the [Subscription] that was previously created with
     /// [subscribe](MAPIGraphQL::subscribe). This will return an [Err(String)](Err) if the
     /// request failed.
@@ -133,7 +130,7 @@ impl Subscription {
     }
 }
 
-impl Drop for Subscription {
+impl<'a> Drop for Subscription<'a> {
     /// Cleanup a `Subscription` that was previously created with [subscribe](MAPIGraphQL::subscribe).
     ///
     /// This is a no-op for `Query` or `Mutation` requests since they deliver 1 immediate result.
