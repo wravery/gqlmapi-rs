@@ -10,13 +10,14 @@ use std::{
 
 fn main() -> io::Result<()> {
     println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
-
     let vcpkg_root = env::var("VCPKG_ROOT").map_or_else(
         |_| {
             // Try to find %LOCALAPPDATA%\vcpkg\vcpkg.path.txt if %VCPKG_ROOT% was not set.
+            println!("cargo:rerun-if-env-changed=LOCALAPPDATA");
             let mut vcpkg_app_data = PathBuf::from(env!("LOCALAPPDATA"));
             vcpkg_app_data.push("vcpkg");
             vcpkg_app_data.push("vcpkg.path.txt");
+            println!("cargo:rerun-if-changed={}", vcpkg_app_data.display());
             let mut vcpkg_path_txt = File::open(&vcpkg_app_data)
                 .expect(format!("Failed to open: {}", vcpkg_app_data.display()).as_str());
             let mut buf = Vec::new();
