@@ -13,6 +13,7 @@ enum Error {
     Utf8(FromUtf8Error),
     GraphQL(String),
     Channel(RecvError),
+    Lock,
 }
 
 fn main() -> Result<(), Error> {
@@ -30,8 +31,9 @@ fn execute_query(query: String) -> Result<String, Error> {
     let query = gqlmapi.parse_query(&query).map_err(Error::GraphQL)?;
     let (tx_next, rx_next) = mpsc::channel();
     let (tx_complete, rx_complete) = mpsc::channel();
-    let mut subscription = gqlmapi.subscribe(&query, "", "");
-    subscription
+    let subscription = gqlmapi.subscribe(query.clone(), "", "");
+    let mut locked_subscription = subscription.lock().map_err(|_| Error::Lock)?;
+    locked_subscription
         .listen(tx_next, tx_complete)
         .map_err(Error::GraphQL)?;
     let results = rx_next.recv().map_err(Error::Channel)?;

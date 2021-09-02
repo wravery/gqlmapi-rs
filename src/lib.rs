@@ -125,7 +125,7 @@ impl MAPIGraphQL {
     /// be used to represent the request in 1 or more calls to [subscribe](MAPIGraphQL::subscribe).
     ///
     /// If the request document cannot be parsed, it will return an [Err(String)](Err).
-    pub fn parse_query(&self, query: &str) -> Result<ParsedQuery, String> {
+    pub fn parse_query(&self, query: &str) -> Result<Arc<ParsedQuery>, String> {
         let (tx, rx) = mpsc::channel();
         self.0
             .sender
@@ -134,23 +134,23 @@ impl MAPIGraphQL {
             .send(ServiceCommand::ParsedQuery(String::from(query), tx))
             .map_err(map_send_error)?;
         let result = rx.recv().map_err(map_recv_error)?;
-        Ok(ParsedQuery(self.0.clone(), result?))
+        Ok(Arc::new(ParsedQuery(self.0.clone(), result?)))
     }
 
     /// Subscribe to a [GraphQL](https://graphql.org) [ParsedQuery] that was previously parsed with
     /// [parse_query](MAPIGraphQL::parse_query).
-    pub fn subscribe<'a>(
+    pub fn subscribe(
         &self,
-        query: &'a ParsedQuery,
+        query: Arc<ParsedQuery>,
         operation_name: &str,
         variables: &str,
-    ) -> Subscription<'a> {
-        Subscription {
+    ) -> Mutex<Subscription> {
+        Mutex::new(Subscription {
             subscription_id: 0,
             query,
             operation_name: operation_name.into(),
             variables: variables.into(),
-        }
+        })
     }
 }
 
@@ -183,14 +183,14 @@ impl Drop for ParsedQuery {
 
 /// Hold on to an operation subscription created with [subscribe](MAPIGraphQL::subscribe) and
 /// automatically clean up when [Subscription] drops..
-pub struct Subscription<'a> {
+pub struct Subscription {
     subscription_id: i32,
-    query: &'a ParsedQuery,
+    query: Arc<ParsedQuery>,
     operation_name: String,
     variables: String,
 }
 
-impl<'a> Subscription<'a> {
+impl Subscription {
     /// Start listening to the [Subscription] that was previously created with
     /// [subscribe](MAPIGraphQL::subscribe). This will return an [Err(String)](Err) if the
     /// request failed.
@@ -244,7 +244,7 @@ impl<'a> Subscription<'a> {
     }
 }
 
-impl<'a> Drop for Subscription<'a> {
+impl Drop for Subscription {
     /// Cleanup a `Subscription` that was previously created with [subscribe](MAPIGraphQL::subscribe).
     ///
     /// This is a no-op for `Query` or `Mutation` requests since they deliver 1 immediate result.
@@ -333,13 +333,16 @@ mod test {
             .expect("parses the introspection query");
         assert_ne!(0, query.1, "query ID is not 0");
 
-        let mut subscription = gqlmapi.subscribe(&query, "", "");
+        let subscription = gqlmapi.subscribe(query.clone(), "", "");
+        let mut locked_subscription = subscription
+            .lock()
+            .expect("should lock the mut subscription");
         let (tx_next, rx_next) = mpsc::channel();
         let (tx_complete, rx_complete) = mpsc::channel();
-        subscription
+        locked_subscription
             .listen(tx_next, tx_complete)
             .expect("subscribes to the query");
-        assert_ne!(subscription.subscription_id, 0, "subscription ID is not 0");
+        assert_ne!(locked_subscription.subscription_id, 0, "subscription ID is not 0");
         let results = rx_next.recv().expect("should always receive a payload");
         let results = serde_json::from_str::<IntrospectionResults>(&results)
             .expect("payload should fit query");
