@@ -21,12 +21,19 @@ to build/install `cppgraphqlgen` with `vcpkg` for your target triplet, e.g.:
 > vcpkg install cppgraphqlgen:x64-windows-static
 ```
 
-You will need to set an environment variable to tell [build.rs](./build.rs) where to find it. In this
-example, I have `vcpkg` in a subdirectory called `source\repos\microsoft\vcpkg` under my user profile,
-and I'm targetting `x64-windows-static`, so I don't need to copy any DLLs from vcpkg.
+You will need to set an environment variable to tell [build.rs](./build.rs) where to find it, or install the
+user-wide vcpkg integration before building this crate. In this example, I have `vcpkg` in a subdirectory
+called `source\repos\microsoft\vcpkg` under my user profile, and I'm targetting `x64-windows-static`, so I
+don't need to copy any DLLs from vcpkg:
 
 ```cmd
 > set VCPKG_ROOT=%USERPROFILE%\source\repos\microsoft\vcpkg
+```
+
+or:
+
+```cmd
+> vcpkg integrate install
 ```
 
 The `build.rs` script determines the target `x64-windows` or `x86-windows` platform based on the Rust target,
