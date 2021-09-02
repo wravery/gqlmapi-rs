@@ -6,6 +6,14 @@ use std::{
 mod bindings;
 use bindings::{ffi, CompleteContext, NextContext};
 
+mod windows_bindings {
+    windows::include_bindings!();
+}
+
+use windows_bindings::Windows::Win32::{
+    Foundation::*, System::Threading::GetCurrentThreadId, UI::WindowsAndMessaging::*,
+};
+
 enum ServiceCommand {
     Stop,
     ParsedQuery(String, mpsc::Sender<Result<i32, String>>),
@@ -25,66 +33,118 @@ enum ServiceCommand {
 struct Service {
     worker: Option<JoinHandle<Result<(), String>>>,
     sender: Mutex<mpsc::Sender<ServiceCommand>>,
+    thread_id: u32,
 }
 
 impl Service {
     fn new(use_default_profile: bool) -> Arc<Self> {
-        let (tx, rx) = mpsc::channel();
-        Arc::new(Service {
-            worker: Some(thread::spawn(move || {
-                let bindings = ffi::make_bindings();
-                bindings.startService(use_default_profile);
+        let (tx_thread_id, rx_thread_id) = mpsc::channel();
+        let (tx_command, rx_command) = mpsc::channel();
+        let worker = Some(thread::spawn(move || {
+            let thread_id = unsafe { GetCurrentThreadId() };
+            tx_thread_id
+                .send(thread_id)
+                .expect("Error sending thread ID");
 
-                loop {
-                    match rx.recv().map_err(map_recv_error)? {
-                        ServiceCommand::Stop => {
-                            bindings.stopService();
-                            break;
-                        }
-                        ServiceCommand::ParsedQuery(query, tx_result) => tx_result
-                            .send(bindings.parseQuery(&query).map_err(map_exception))
-                            .map_err(map_send_error)?,
-                        ServiceCommand::DiscardQuery(query_id) => bindings.discardQuery(query_id),
-                        ServiceCommand::Subscribe(
-                            query_id,
-                            operation_name,
-                            variables,
-                            tx_next,
-                            tx_complete,
-                            tx_result,
-                        ) => {
-                            let next_context = Box::new(NextContext(Box::new(move |payload| {
+            let bindings = ffi::make_bindings();
+            bindings.startService(use_default_profile);
+
+            loop {
+                match Self::wait_with_pump(&rx_command)? {
+                    ServiceCommand::Stop => {
+                        bindings.stopService();
+                        break;
+                    }
+                    ServiceCommand::ParsedQuery(query, tx_result) => tx_result
+                        .send(bindings.parseQuery(&query).map_err(map_exception))
+                        .map_err(map_send_error)?,
+                    ServiceCommand::DiscardQuery(query_id) => bindings.discardQuery(query_id),
+                    ServiceCommand::Subscribe(
+                        query_id,
+                        operation_name,
+                        variables,
+                        tx_next,
+                        tx_complete,
+                        tx_result,
+                    ) => {
+                        let next_context = Box::new(NextContext {
+                            thread_id,
+                            callback: Box::new(move |payload| {
                                 tx_next.send(payload).expect("Error sending next payload")
-                            })));
-                            let complete_context = Box::new(CompleteContext(Box::new(move || {
+                            }),
+                        });
+                        let complete_context = Box::new(CompleteContext {
+                            thread_id,
+                            callback: Box::new(move || {
                                 tx_complete.send(()).expect("Error sending complete")
-                            })));
-                            let subscription_id = bindings
-                                .subscribe(
-                                    query_id,
-                                    &operation_name,
-                                    &variables,
-                                    next_context,
-                                    |mut context, payload| {
-                                        context.0(payload);
-                                        context
-                                    },
-                                    complete_context,
-                                    |context| context.0(),
-                                )
-                                .map_err(map_exception);
-                            tx_result.send(subscription_id).map_err(map_send_error)?
-                        }
-                        ServiceCommand::Unsubscribe(subscription_id) => {
-                            bindings.unsubscribe(subscription_id)
-                        }
+                            }),
+                        });
+                        let subscription_id = bindings
+                            .subscribe(
+                                query_id,
+                                &operation_name,
+                                &variables,
+                                next_context,
+                                |mut context, payload| {
+                                    Self::kick_pump(context.thread_id);
+                                    (context.callback)(payload);
+                                    context
+                                },
+                                complete_context,
+                                |context| {
+                                    Self::kick_pump(context.thread_id);
+                                    (context.callback)();
+                                },
+                            )
+                            .map_err(map_exception);
+                        tx_result.send(subscription_id).map_err(map_send_error)?
+                    }
+                    ServiceCommand::Unsubscribe(subscription_id) => {
+                        bindings.unsubscribe(subscription_id)
                     }
                 }
+            }
 
-                Ok(())
-            })),
-            sender: Mutex::new(tx),
+            Ok(())
+        }));
+        let thread_id = rx_thread_id.recv().expect("Error receiving thread ID");
+
+        Arc::new(Service {
+            worker,
+            sender: Mutex::new(tx_command),
+            thread_id,
         })
+    }
+
+    fn kick_pump(thread_id: u32) {
+        unsafe { PostThreadMessageA(thread_id, WM_APP, WPARAM::default(), LPARAM::default()) };
+    }
+
+    fn wait_with_pump<T>(rx: &mpsc::Receiver<T>) -> Result<T, String> {
+        let mut msg = MSG::default();
+        let hwnd = HWND::default();
+
+        loop {
+            if let Ok(result) = rx.try_recv() {
+                return Ok(result);
+            }
+
+            unsafe {
+                match GetMessageA(&mut msg, hwnd, 0, 0).0 {
+                    -1 => {
+                        return Err(format!(
+                            "GetMessageA error: {}",
+                            windows::HRESULT::from_thread().0
+                        ));
+                    }
+                    0 => return Err(String::from("Cancelled")),
+                    _ => {
+                        TranslateMessage(&msg);
+                        DispatchMessageA(&msg);
+                    }
+                }
+            }
+        }
     }
 
     fn stop(&mut self) -> Result<(), String> {
@@ -93,6 +153,7 @@ impl Service {
             .map_err(map_lock_error)?
             .send(ServiceCommand::Stop)
             .map_err(map_send_error)?;
+        Self::kick_pump(self.thread_id);
 
         if let Some(worker) = self.worker.take() {
             let result = worker
@@ -133,6 +194,7 @@ impl MAPIGraphQL {
             .map_err(map_lock_error)?
             .send(ServiceCommand::ParsedQuery(String::from(query), tx))
             .map_err(map_send_error)?;
+        Service::kick_pump(self.0.thread_id);
         let result = rx.recv().map_err(map_recv_error)?;
         Ok(Arc::new(ParsedQuery(self.0.clone(), result?)))
     }
@@ -167,6 +229,7 @@ impl ParsedQuery {
                 .map_err(map_lock_error)?
                 .send(ServiceCommand::DiscardQuery(self.1))
                 .map_err(map_send_error)?;
+            Service::kick_pump(self.0.thread_id);
             self.1 = 0;
         }
         Ok(())
@@ -223,6 +286,7 @@ impl Subscription {
                 tx,
             ))
             .map_err(map_send_error)?;
+        Service::kick_pump(self.query.0.thread_id);
         let result = rx.recv().map_err(map_recv_error)?;
 
         self.subscription_id = result?;
@@ -238,6 +302,7 @@ impl Subscription {
                 .map_err(map_lock_error)?
                 .send(ServiceCommand::Unsubscribe(self.subscription_id))
                 .map_err(map_send_error)?;
+            Service::kick_pump(self.query.0.thread_id);
             self.subscription_id = 0;
         }
         Ok(())
@@ -342,7 +407,10 @@ mod test {
         locked_subscription
             .listen(tx_next, tx_complete)
             .expect("subscribes to the query");
-        assert_ne!(locked_subscription.subscription_id, 0, "subscription ID is not 0");
+        assert_ne!(
+            locked_subscription.subscription_id, 0,
+            "subscription ID is not 0"
+        );
         let results = rx_next.recv().expect("should always receive a payload");
         let results = serde_json::from_str::<IntrospectionResults>(&results)
             .expect("payload should fit query");

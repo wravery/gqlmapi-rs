@@ -10,9 +10,17 @@ fn main() -> io::Result<()> {
 
     let vcpkg_root = env::var("VCPKG_ROOT").expect("must set VCPKG_ROOT");
 
-    let platform = if cfg!(target_pointer_width = "64") { "x64-windows" } else { "x86-windows" };
+    let platform = if cfg!(target_pointer_width = "64") {
+        "x64-windows"
+    } else {
+        "x86-windows"
+    };
     let vcpkg_static = cfg!(feature = "crt-static");
-    let vcpkg_triplet = if vcpkg_static { format!("{}-static", platform) } else { String::from(platform) };
+    let vcpkg_triplet = if vcpkg_static {
+        format!("{}-static", platform)
+    } else {
+        String::from(platform)
+    };
 
     let gqlmapi = cmake::Config::new("gqlmapi")
         .define(
@@ -84,6 +92,25 @@ fn main() -> io::Result<()> {
         .flag_if_supported("/EHsc")
         .static_crt(vcpkg_static)
         .compile("gqlmapi-rs");
+
+    windows::build! {
+        Windows::Win32::{
+            Foundation::{
+                HWND,
+                LPARAM,
+                WPARAM,
+            },
+            System::Threading::GetCurrentThreadId,
+            UI::WindowsAndMessaging::{
+                MSG,
+                WM_APP,
+                DispatchMessageA,
+                GetMessageA,
+                PostThreadMessageA,
+                TranslateMessage,
+            },
+        }
+    };
 
     Ok(())
 }
