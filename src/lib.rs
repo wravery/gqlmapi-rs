@@ -68,16 +68,16 @@ impl Service {
                         tx_result,
                     ) => {
                         let next_context = Box::new(NextContext {
-                            thread_id,
                             callback: Box::new(move |payload| {
                                 tx_next.send(payload).expect("Error sending next payload")
                             }),
+                            thread_id,
                         });
                         let complete_context = Box::new(CompleteContext {
-                            thread_id,
                             callback: Box::new(move || {
-                                tx_complete.send(()).expect("Error sending complete")
+                                let _ = tx_complete.send(());
                             }),
+                            thread_id,
                         });
                         let subscription_id = bindings
                             .subscribe(
@@ -86,14 +86,14 @@ impl Service {
                                 &variables,
                                 next_context,
                                 |mut context, payload| {
-                                    Self::kick_pump(context.thread_id);
                                     (context.callback)(payload);
+                                    Self::kick_pump(context.thread_id);
                                     context
                                 },
                                 complete_context,
                                 |context| {
-                                    Self::kick_pump(context.thread_id);
                                     (context.callback)();
+                                    Self::kick_pump(context.thread_id);
                                 },
                             )
                             .map_err(map_exception);

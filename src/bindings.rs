@@ -34,11 +34,11 @@ pub mod ffi {
 }
 
 pub struct NextContext {
-    pub thread_id: u32,
     pub callback: Box<dyn FnMut(String)>,
+    pub thread_id: u32,
 }
 
 pub struct CompleteContext {
-    pub thread_id: u32,
     pub callback: Box<dyn FnOnce()>,
+    pub thread_id: u32,
 }
