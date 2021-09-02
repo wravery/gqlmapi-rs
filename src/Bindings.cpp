@@ -28,9 +28,9 @@ public:
 	~Subscription();
 
 	void Subscribe(service::SubscriptionKey key) noexcept;
-	void Unsubscribe() noexcept;
-	void Deliver(std::future<response::Value> &&payload) noexcept;
-	void Complete() noexcept;
+	void Unsubscribe();
+	void Deliver(std::future<response::Value> &&payload);
+	void Complete();
 
 private:
 	std::weak_ptr<service::Request> _weakService;
@@ -62,7 +62,7 @@ void Subscription::Subscribe(service::SubscriptionKey key) noexcept
 	_key = std::make_optional(key);
 }
 
-void Subscription::Unsubscribe() noexcept
+void Subscription::Unsubscribe()
 {
 	if (!_registered)
 	{
@@ -81,7 +81,7 @@ void Subscription::Unsubscribe() noexcept
 	}
 }
 
-void Subscription::Deliver(std::future<response::Value> &&payload) noexcept
+void Subscription::Deliver(std::future<response::Value> &&payload)
 {
 	response::Value document{response::Type::Map};
 
@@ -108,7 +108,7 @@ void Subscription::Deliver(std::future<response::Value> &&payload) noexcept
 	_nextContext = _nextCallback(std::move(_nextContext), rust::String{response::toJSON(std::move(document))});
 }
 
-void Subscription::Complete() noexcept
+void Subscription::Complete()
 {
 	_completeCallback(std::move(_completeContext));
 }
@@ -153,7 +153,7 @@ RegisteredSubscription::RegisteredSubscription(const std::shared_ptr<service::Re
 														   peg::ast{ast},
 														   std::string{operationName},
 														   std::move(variables)},
-							   [weakSubscription = std::weak_ptr{_subscription}](std::future<response::Value> payload) noexcept
+							   [weakSubscription = std::weak_ptr{_subscription}](std::future<response::Value> payload)
 							   {
 								   auto subscription = weakSubscription.lock();
 
@@ -178,10 +178,11 @@ RegisteredSubscription::RegisteredSubscription(const std::shared_ptr<service::Re
 
 void RegisteredSubscription::Unsubscribe() noexcept
 {
-	if (_subscription)
+	const auto subscription = std::move(_subscription);
+
+	if (subscription)
 	{
-		_subscription->Unsubscribe();
-		_subscription.reset();
+		subscription->Unsubscribe();
 	}
 }
 
@@ -192,7 +193,7 @@ public:
 	~impl() = default;
 
 	void startService(bool useDefaultProfile) noexcept;
-	void stopService() noexcept;
+	void stopService();
 
 	std::int32_t parseQuery(std::string_view query);
 	void discardQuery(std::int32_t queryId) noexcept;
@@ -204,7 +205,7 @@ public:
 						   NextCallback nextCallback,
 						   rust::Box<CompleteContext> completeContext,
 						   CompleteCallback completeCallback);
-	void unsubscribe(std::int32_t subscriptionId) noexcept;
+	void unsubscribe(std::int32_t subscriptionId);
 
 private:
 	std::shared_ptr<service::Request> service;
@@ -217,7 +218,7 @@ void Bindings::impl::startService(bool useDefaultProfile) noexcept
 	service = mapi::GetService(useDefaultProfile);
 }
 
-void Bindings::impl::stopService() noexcept
+void Bindings::impl::stopService()
 {
 	if (service)
 	{
@@ -287,7 +288,7 @@ std::int32_t Bindings::impl::subscribe(std::int32_t queryId,
 	return subscriptionId;
 }
 
-void Bindings::impl::unsubscribe(std::int32_t subscriptionId) noexcept
+void Bindings::impl::unsubscribe(std::int32_t subscriptionId)
 {
 	auto itr = subscriptionMap.find(subscriptionId);
 
@@ -312,7 +313,7 @@ void Bindings::startService(bool useDefaultProfile) const noexcept
 	m_pimpl->startService(useDefaultProfile);
 }
 
-void Bindings::stopService() const noexcept
+void Bindings::stopService() const
 {
 	m_pimpl->stopService();
 }
@@ -344,7 +345,7 @@ std::int32_t Bindings::subscribe(std::int32_t queryId,
 							  std::move(completeCallback));
 }
 
-void Bindings::unsubscribe(std::int32_t subscriptionId) const noexcept
+void Bindings::unsubscribe(std::int32_t subscriptionId) const
 {
 	m_pimpl->unsubscribe(subscriptionId);
 }

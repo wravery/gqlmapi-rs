@@ -19,7 +19,7 @@ public:
 	~Bindings();
 
 	void startService(bool useDefaultProfile) const noexcept;
-	void stopService() const noexcept;
+	void stopService() const;
 
 	std::int32_t parseQuery(rust::Str query) const;
 	void discardQuery(std::int32_t queryId) const noexcept;
@@ -34,7 +34,7 @@ public:
 						   NextCallback nextCallback,
 						   rust::Box<CompleteContext> completeContext,
 						   CompleteCallback completeCallback) const;
-	void unsubscribe(std::int32_t subscriptionId) const noexcept;
+	void unsubscribe(std::int32_t subscriptionId) const;
 
 private:
 	class impl;
