@@ -5,7 +5,8 @@ version = 3
 [[package]]
 name = "cc"
 version = "1.0.70"
-source = "git+https://github.com/wravery/cc-rs#4607e0b03d7743514b0b9986969525fcce85e900"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d26a6ce4b6a484fa3edb70f7efa6fc430fd2b87285fe8b84304fd0936faa0dc0"
 
 [[package]]
 name = "cmake"
@@ -78,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "gqlmapi-rs"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "cmake",
  "cxx",

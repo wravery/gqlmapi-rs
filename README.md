@@ -42,20 +42,9 @@ would rather not redistribute DLLs for `gqlmapi` and `cppgraphqlgen` with your a
 `.cargo/config.toml` file in your project:_
 
 ```toml
-[target.'cfg(target_env = "msvc")']
+[target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
 ```
-
-_There's a temporary patch for the `cc` crate which you should also add to your `Cargo.toml` file. This includes
-the changes in [alexcrichton/cc-rs#619](https://github.com/alexcrichton/cc-rs/pull/619), which allows it to
-build the `cxx` crate using this target feature without any other modifications to your environment or user-wide
-`cargo` configuration:_
-
-```toml
-[patch.crates-io]
-cc = { git = "https://github.com/wravery/cc-rs" }
-```
-
 
 Make sure you have also cloned the `gqlmapi` sub-module. If you did not clone this repo recursively, you
 can still pull down the sub-module with a couple of git commands:

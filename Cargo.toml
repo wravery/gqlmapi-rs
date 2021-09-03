@@ -1,15 +1,12 @@
 [package]
 name = "gqlmapi-rs"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2018"
 description = "Rust bindings for https://github.com/microsoft/gqlmapi"
 repository = "https://github.com/wravery/gqlmapi-rs"
 license = "MIT"
 keywords = ["MAPI", "GraphQL", "gqlmapi"]
 categories = ["os::windows-apis"]
-
-[patch.crates-io]
-cc = { git = "https://github.com/wravery/cc-rs" }
 
 [dependencies]
 cxx = "1.0.54"
