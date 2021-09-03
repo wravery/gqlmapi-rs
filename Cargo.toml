@@ -1,6 +1,6 @@
 [package]
 name = "gqlmapi-rs"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2018"
 description = "Rust bindings for https://github.com/microsoft/gqlmapi"
 repository = "https://github.com/wravery/gqlmapi-rs"

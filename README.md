@@ -36,8 +36,26 @@ or:
 > vcpkg integrate install
 ```
 
-The `build.rs` script determines the target `x64-windows-static` or `x86-windows-static` platform based on
-the Rust target.
+The `build.rs` script determines the target `x64-windows` or `x86-windows` platform based on the Rust target,
+and if you enable the `crt-static` target feature feature, it also uses the `-static` triplet. _Hint: If you
+would rather not redistribute DLLs for `gqlmapi` and `cppgraphqlgen` with your app, try adding this to the
+`.cargo/config.toml` file in your project:_
+
+```toml
+[target.'cfg(target_env = "msvc")']
+rustflags = ["-C", "target-feature=+crt-static"]
+```
+
+_There's a temporary patch for the `cc` crate which you should also add to your `Cargo.toml` file. This includes
+the changes in [alexcrichton/cc-rs#619](https://github.com/alexcrichton/cc-rs/pull/619), which allows it to
+build the `cxx` crate using this target feature without any other modifications to your environment or user-wide
+`cargo` configuration:_
+
+```toml
+[patch.crates-io]
+cc = { git = "https://github.com/wravery/cc-rs" }
+```
+
 
 Make sure you have also cloned the `gqlmapi` sub-module. If you did not clone this repo recursively, you
 can still pull down the sub-module with a couple of git commands:
@@ -45,36 +63,6 @@ can still pull down the sub-module with a couple of git commands:
 ```cmd
 > git submodule init
 > git submodule update
-```
-
-There is a temporary dependency on my fork with [dtolnay/cxx#927](https://github.com/dtolnay/cxx/pull/927),
-so it will install `cxx` with `git`. The `cxx` build has a quirk that it depends on the git configuration
-if you are building it from a repo instead of the packaged crate:
-
-> ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-> When building `cxx` from a git clone, git's symlink support needs
-> to be enabled on platforms that have it off by default (Windows).
-> Either use:
-> 
->    $ git config --global core.symlinks true
-> 
-> prior to cloning, or else use:
-> 
->    $ git clone -c core.symlinks=true https://github.com/dtolnay/cxx
-> 
-> for the clone.
-> 
-> Symlinks are only required when compiling locally from a clone of
-> the git repository---they are NOT required when building `cxx` as
-> a Cargo-managed (possibly transitive) build dependency downloaded
-> through crates.io.
-> ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Since `cargo` is the one making the clone (and it's from my fork), you need to change the global setting
-before you run `cargo build`:
-
-```cmd
-> git config --global core.symlinks true
 ```
 
 After that, you should be ready to build with `cargo build`.
