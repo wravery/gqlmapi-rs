@@ -35,7 +35,7 @@ fn main() -> io::Result<()> {
     } else {
         "x86-windows"
     };
-    let vcpkg_static = cfg!(feature = "crt-static");
+    let vcpkg_static = cfg!(target_feature = "crt-static");
     let vcpkg_triplet = if vcpkg_static {
         format!("{}-static", platform)
     } else {

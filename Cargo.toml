@@ -8,12 +8,11 @@ license = "MIT"
 keywords = ["MAPI", "GraphQL", "gqlmapi"]
 categories = ["os::windows-apis"]
 
-[features]
-"crt-static" = ["cxx/crt-static"]
-default = ["crt-static"]
+[patch.crates-io]
+cc = { git = "https://github.com/wravery/cc-rs" }
 
 [dependencies]
-cxx = { git = "https://github.com/wravery/cxx" }
+cxx = "1.0.54"
 windows = "0.19.0"
 
 [build-dependencies]

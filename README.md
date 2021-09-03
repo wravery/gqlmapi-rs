@@ -36,8 +36,8 @@ or:
 > vcpkg integrate install
 ```
 
-The `build.rs` script determines the target `x64-windows` or `x86-windows` platform based on the Rust target,
-and unless you turn off the default `crt-static` feature, it assumes that it should use the `-static` triplet.
+The `build.rs` script determines the target `x64-windows-static` or `x86-windows-static` platform based on
+the Rust target.
 
 Make sure you have also cloned the `gqlmapi` sub-module. If you did not clone this repo recursively, you
 can still pull down the sub-module with a couple of git commands:
