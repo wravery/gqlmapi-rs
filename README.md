@@ -6,9 +6,9 @@ support code and state management for that API projection though, that I decided
 an API projection to [Rust](https://www.rust-lang.org/).
 
 The next layer in the [Electron](https://www.electronjs.org/) stack is
-[eMAPI](https://github.com/microsoft/eMAPI). The next layer in this stack will probably be a
-[Tauri](https://tauri.studio/en) app that does the same thing but in a much more lightweight fashion than
-`Electron`.
+[eMAPI](https://github.com/microsoft/eMAPI). The corresponding next layer in this stack is a
+[Tauri](https://tauri.studio/en) app called [Tauri GqlMAPI](https://github.com/wravery/tauri-gqlmapi) that
+does the same thing but in a much more lightweight fashion than `Electron`.
 
 ## Getting Started
 
