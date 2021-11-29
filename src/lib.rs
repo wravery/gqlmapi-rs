@@ -406,7 +406,7 @@ mod test {
             .expect("parses the introspection query");
         assert_ne!(0, query.1, "query ID is not 0");
 
-        let subscription = gqlmapi.subscribe(query.clone(), "", "");
+        let subscription = gqlmapi.subscribe(query, "", "");
         let mut locked_subscription = subscription
             .lock()
             .expect("should lock the mut subscription");
