@@ -170,7 +170,7 @@ impl Service {
 }
 
 impl Drop for Service {
-    /// Shutdown the [GraphQL](https://graphql.org) service log off from the `MAPI` session.
+    /// Shutdown the [GraphQL](https://graphql.org) service and log off from the `MAPI` session.
     fn drop(&mut self) {
         self.stop().expect("Unable to stop the service");
     }
