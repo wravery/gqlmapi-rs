@@ -113,24 +113,5 @@ fn main() -> io::Result<()> {
         .static_crt(vcpkg_static)
         .compile("gqlmapi-rs");
 
-    windows::build! {
-        Windows::Win32::{
-            Foundation::{
-                HWND,
-                LPARAM,
-                WPARAM,
-            },
-            System::Threading::GetCurrentThreadId,
-            UI::WindowsAndMessaging::{
-                MSG,
-                WM_APP,
-                DispatchMessageA,
-                GetMessageA,
-                PostThreadMessageA,
-                TranslateMessage,
-            },
-        }
-    };
-
     Ok(())
 }

@@ -6,27 +6,30 @@ use std::{
 mod bindings;
 use bindings::{ffi, CompleteContext, NextContext};
 
-mod windows_bindings {
-    windows::include_bindings!();
-}
-
-use windows_bindings::Windows::Win32::{
+use windows::Win32::{
     Foundation::*, System::Threading::GetCurrentThreadId, UI::WindowsAndMessaging::*,
 };
 
 enum ServiceCommand {
     Stop,
-    ParsedQuery(String, mpsc::Sender<Result<i32, String>>),
-    DiscardQuery(i32),
-    Subscribe(
-        i32,
-        String,
-        String,
-        mpsc::Sender<String>,
-        mpsc::Sender<()>,
-        mpsc::Sender<Result<i32, String>>,
-    ),
-    Unsubscribe(i32),
+    ParsedQuery {
+        query: String,
+        tx_result: mpsc::Sender<Result<i32, String>>,
+    },
+    DiscardQuery {
+        query_id: i32,
+    },
+    Subscribe {
+        query_id: i32,
+        operation_name: String,
+        variables: String,
+        tx_next: mpsc::Sender<String>,
+        tx_complete: mpsc::Sender<()>,
+        tx_result: mpsc::Sender<Result<i32, String>>,
+    },
+    Unsubscribe {
+        subscription_id: i32,
+    },
 }
 
 /// Hold the `Bindings` object and automatically clean up when [Service] drops.
@@ -55,18 +58,18 @@ impl Service {
                         bindings.stopService();
                         break;
                     }
-                    ServiceCommand::ParsedQuery(query, tx_result) => tx_result
+                    ServiceCommand::ParsedQuery { query, tx_result } => tx_result
                         .send(bindings.parseQuery(&query).map_err(map_exception))
                         .map_err(map_send_error)?,
-                    ServiceCommand::DiscardQuery(query_id) => bindings.discardQuery(query_id),
-                    ServiceCommand::Subscribe(
+                    ServiceCommand::DiscardQuery { query_id } => bindings.discardQuery(query_id),
+                    ServiceCommand::Subscribe {
                         query_id,
                         operation_name,
                         variables,
                         tx_next,
                         tx_complete,
                         tx_result,
-                    ) => {
+                    } => {
                         let next_context = Box::new(NextContext {
                             callback: Box::new(move |payload| {
                                 tx_next.send(payload).expect("Error sending next payload")
@@ -99,7 +102,7 @@ impl Service {
                             .map_err(map_exception);
                         tx_result.send(subscription_id).map_err(map_send_error)?
                     }
-                    ServiceCommand::Unsubscribe(subscription_id) => {
+                    ServiceCommand::Unsubscribe { subscription_id } => {
                         bindings.unsubscribe(subscription_id)
                     }
                 }
@@ -134,7 +137,7 @@ impl Service {
                     -1 => {
                         return Err(format!(
                             "GetMessageA error: {}",
-                            windows::HRESULT::from_thread().0
+                            windows::core::Error::from_win32().code().0
                         ));
                     }
                     0 => return Err(String::from("Cancelled")),
@@ -192,7 +195,10 @@ impl MAPIGraphQL {
             .sender
             .lock()
             .map_err(map_lock_error)?
-            .send(ServiceCommand::ParsedQuery(String::from(query), tx))
+            .send(ServiceCommand::ParsedQuery {
+                query: String::from(query),
+                tx_result: tx,
+            })
             .map_err(map_send_error)?;
         Service::kick_pump(self.0.thread_id);
         let result = rx.recv().map_err(map_recv_error)?;
@@ -227,7 +233,7 @@ impl ParsedQuery {
                 .sender
                 .lock()
                 .map_err(map_lock_error)?
-                .send(ServiceCommand::DiscardQuery(self.1))
+                .send(ServiceCommand::DiscardQuery { query_id: self.1 })
                 .map_err(map_send_error)?;
             Service::kick_pump(self.0.thread_id);
             self.1 = 0;
@@ -277,14 +283,14 @@ impl Subscription {
             .sender
             .lock()
             .map_err(map_lock_error)?
-            .send(ServiceCommand::Subscribe(
-                self.query.1,
-                self.operation_name.clone(),
-                self.variables.clone(),
-                next,
-                complete,
-                tx,
-            ))
+            .send(ServiceCommand::Subscribe {
+                query_id: self.query.1,
+                operation_name: self.operation_name.clone(),
+                variables: self.variables.clone(),
+                tx_next: next,
+                tx_complete: complete,
+                tx_result: tx,
+            })
             .map_err(map_send_error)?;
         Service::kick_pump(self.query.0.thread_id);
         let result = rx.recv().map_err(map_recv_error)?;
@@ -300,7 +306,9 @@ impl Subscription {
                 .sender
                 .lock()
                 .map_err(map_lock_error)?
-                .send(ServiceCommand::Unsubscribe(self.subscription_id))
+                .send(ServiceCommand::Unsubscribe {
+                    subscription_id: self.subscription_id,
+                })
                 .map_err(map_send_error)?;
             Service::kick_pump(self.query.0.thread_id);
             self.subscription_id = 0;
