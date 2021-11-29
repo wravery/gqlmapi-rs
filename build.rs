@@ -10,25 +10,22 @@ use std::{
 
 fn main() -> io::Result<()> {
     println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
-    let vcpkg_root = env::var("VCPKG_ROOT").map_or_else(
-        |_| {
-            // Try to find %LOCALAPPDATA%\vcpkg\vcpkg.path.txt if %VCPKG_ROOT% was not set.
-            println!("cargo:rerun-if-env-changed=LOCALAPPDATA");
-            let mut vcpkg_app_data = PathBuf::from(env!("LOCALAPPDATA"));
-            vcpkg_app_data.push("vcpkg");
-            vcpkg_app_data.push("vcpkg.path.txt");
-            println!("cargo:rerun-if-changed={}", vcpkg_app_data.display());
-            let mut vcpkg_path_txt = File::open(&vcpkg_app_data)
-                .expect(format!("Failed to open: {}", vcpkg_app_data.display()).as_str());
-            let mut buf = Vec::new();
-            vcpkg_path_txt
-                .read_to_end(&mut buf)
-                .expect(format!("Failed to read: {}", vcpkg_app_data.display()).as_str());
-            String::from_utf8(buf)
-                .expect(format!("Failed to decode: {}", vcpkg_app_data.display()).as_str())
-        },
-        |value| value,
-    );
+    let vcpkg_root = env::var("VCPKG_ROOT").unwrap_or_else(|_| {
+        // Try to find %LOCALAPPDATA%\vcpkg\vcpkg.path.txt if %VCPKG_ROOT% was not set.
+        println!("cargo:rerun-if-env-changed=LOCALAPPDATA");
+        let mut vcpkg_app_data = PathBuf::from(env!("LOCALAPPDATA"));
+        vcpkg_app_data.push("vcpkg");
+        vcpkg_app_data.push("vcpkg.path.txt");
+        println!("cargo:rerun-if-changed={}", vcpkg_app_data.display());
+        let mut vcpkg_path_txt = File::open(&vcpkg_app_data)
+            .unwrap_or_else(|_| panic!("Failed to open: {}", vcpkg_app_data.display()));
+        let mut buf = Vec::new();
+        vcpkg_path_txt
+            .read_to_end(&mut buf)
+            .unwrap_or_else(|_| panic!("Failed to read: {}", vcpkg_app_data.display()));
+        String::from_utf8(buf)
+            .unwrap_or_else(|_| panic!("Failed to decode: {}", vcpkg_app_data.display()))
+    });
 
     let platform = if cfg!(target_pointer_width = "64") {
         "x64-windows"
