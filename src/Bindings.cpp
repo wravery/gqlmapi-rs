@@ -29,7 +29,8 @@ public:
 
 	void Subscribe(service::SubscriptionKey key) noexcept;
 	void Unsubscribe();
-	void Deliver(std::future<response::Value> &&payload);
+	void Deliver(response::AwaitableValue &&payload);
+	void Deliver(response::Value &&document);
 	void Complete();
 
 private:
@@ -76,12 +77,12 @@ void Subscription::Unsubscribe()
 
 	if (deferUnsubscribe && service)
 	{
-		service->unsubscribe(std::launch::deferred, *deferUnsubscribe).get();
+		service->unsubscribe({*deferUnsubscribe}).get();
 		Complete();
 	}
 }
 
-void Subscription::Deliver(std::future<response::Value> &&payload)
+void Subscription::Deliver(response::AwaitableValue &&payload)
 {
 	response::Value document{response::Type::Map};
 
@@ -105,6 +106,11 @@ void Subscription::Deliver(std::future<response::Value> &&payload)
 		document.emplace_back(std::string{service::strErrors}, response::Value{oss.str()});
 	}
 
+	Deliver(std::move(document));
+}
+
+void Subscription::Deliver(response::Value &&document)
+{
 	_nextContext = _nextCallback(std::move(_nextContext), rust::String{response::toJSON(std::move(document))});
 }
 
@@ -148,30 +154,25 @@ RegisteredSubscription::RegisteredSubscription(const std::shared_ptr<service::Re
 	if (service->findOperationDefinition(ast, operationName).first == service::strSubscription)
 	{
 		_subscription->Subscribe(
-			service->subscribe(std::launch::deferred,
-							   service::SubscriptionParams{nullptr,
-														   peg::ast{ast},
-														   std::string{operationName},
-														   std::move(variables)},
-							   [weakSubscription = std::weak_ptr{_subscription}](std::future<response::Value> payload)
-							   {
-								   auto subscription = weakSubscription.lock();
+			service->subscribe({[weakSubscription = std::weak_ptr{_subscription}](response::Value payload)
+								{
+									auto subscription = weakSubscription.lock();
 
-								   if (subscription)
-								   {
-									   subscription->Deliver(std::move(payload));
-								   }
-							   })
+									if (subscription)
+									{
+										subscription->Deliver(std::move(payload));
+									}
+								},
+								peg::ast{ast},
+								std::string{operationName},
+								std::move(variables)})
 				.get());
 	}
 	else
 	{
-		_subscription->Deliver(service->resolve(
-			std::launch::deferred,
-			nullptr,
-			ast,
-			std::string{operationName},
-			std::move(variables)));
+		_subscription->Deliver(service->resolve({ast,
+												 operationName,
+												 std::move(variables)}));
 		_subscription->Complete();
 	}
 }

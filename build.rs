@@ -70,7 +70,7 @@ fn main() -> io::Result<()> {
         let cpp_libs = [
             "gqlmapi",
             "gqlmapiCommon",
-            "mapischema",
+            "mapi_schema",
             "mapistub",
             "graphqlservice",
             "graphqlintrospection",
@@ -105,7 +105,7 @@ fn main() -> io::Result<()> {
         .file("src/Bindings.cpp")
         .include(gqlmapi_include)
         .include(vcpkg_include)
-        .flag_if_supported("/std:c++17")
+        .flag_if_supported("/std:c++20")
         .flag_if_supported("/EHsc")
         .static_crt(vcpkg_static)
         .compile("gqlmapi-rs");
