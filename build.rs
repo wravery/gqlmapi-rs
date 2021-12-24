@@ -48,6 +48,7 @@ fn main() -> io::Result<()> {
         .define("BUILD_SHARED_LIBS", if vcpkg_static { "OFF" } else { "ON" })
         .define("BUILD_TESTING", "OFF")
         .cxxflag("/EHsc")
+        .generator("Ninja")
         .profile("RelWithDebInfo")
         .build();
 

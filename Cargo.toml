@@ -20,7 +20,7 @@ features = [
 ]
 
 [build-dependencies]
-cmake = { git = "https://github.com/alexcrichton/cmake-rs", rev = "dca4a9df71df40eeb57b974703d745607b168d9f" }
+cmake = "0.1.46"
 cxx-build = "1.0.60"
 
 [dev-dependencies]
