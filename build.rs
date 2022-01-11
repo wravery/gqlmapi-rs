@@ -74,7 +74,6 @@ fn main() -> io::Result<()> {
             "mapi_schema",
             "mapistub",
             "graphqlservice",
-            "graphqlintrospection",
             "graphqlpeg",
             "graphqlresponse",
             "graphqljson",
@@ -87,7 +86,6 @@ fn main() -> io::Result<()> {
         let cpp_dlls = [
             "gqlmapi",
             "graphqlservice",
-            "graphqlintrospection",
             "graphqlpeg",
             "graphqlresponse",
             "graphqljson",
