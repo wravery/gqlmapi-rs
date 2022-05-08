@@ -519,27 +519,11 @@ mod test {
                         },
                         TypeKind {
                             kind: "INPUT_OBJECT".into(),
-                            name: "PropValueInput".into(),
-                        },
-                        TypeKind {
-                            kind: "INPUT_OBJECT".into(),
-                            name: "MultipleItemsInput".into(),
-                        },
-                        TypeKind {
-                            kind: "INPUT_OBJECT".into(),
                             name: "PropIdInput".into(),
                         },
                         TypeKind {
                             kind: "INPUT_OBJECT".into(),
-                            name: "PropertyInput".into(),
-                        },
-                        TypeKind {
-                            kind: "INPUT_OBJECT".into(),
-                            name: "Order".into(),
-                        },
-                        TypeKind {
-                            kind: "INPUT_OBJECT".into(),
-                            name: "Column".into(),
+                            name: "PropValueInput".into(),
                         },
                         TypeKind {
                             kind: "INPUT_OBJECT".into(),
@@ -556,6 +540,22 @@ mod test {
                         TypeKind {
                             kind: "INPUT_OBJECT".into(),
                             name: "ModifyFolderInput".into(),
+                        },
+                        TypeKind {
+                            kind: "INPUT_OBJECT".into(),
+                            name: "MultipleItemsInput".into(),
+                        },
+                        TypeKind {
+                            kind: "INPUT_OBJECT".into(),
+                            name: "PropertyInput".into(),
+                        },
+                        TypeKind {
+                            kind: "INPUT_OBJECT".into(),
+                            name: "Order".into(),
+                        },
+                        TypeKind {
+                            kind: "INPUT_OBJECT".into(),
+                            name: "Column".into(),
                         },
                         TypeKind {
                             kind: "UNION".into(),
