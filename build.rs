@@ -58,8 +58,9 @@ fn main() -> io::Result<()> {
         println!("cargo:rustc-link-search=native={}/bin", gqlmapi.display());
     }
 
-    let mut vcpkg_installed = PathBuf::from(vcpkg_root);
-    vcpkg_installed.push("installed");
+    let mut vcpkg_installed = gqlmapi.clone();
+    vcpkg_installed.push("build");
+    vcpkg_installed.push("vcpkg_installed");
     vcpkg_installed.push(vcpkg_triplet);
 
     println!(
