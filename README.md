@@ -13,13 +13,8 @@ does the same thing but in a much more lightweight fashion than `Electron`.
 ## Getting Started
 
 This project only builds on Windows, and I've only tested it with x64 builds. It requires that you have
-[CMake](https://cmake.org/) installed, the version included with Visual Studio 2019 works fine. It also uses
-the [vcpkg](https://github.com/microsoft/vcpkg) package manager for the dependencies. At a minimum, you need
-to build/install `cppgraphqlgen` with `vcpkg` for your target triplet, e.g.:
-
-```cmd
-> vcpkg install cppgraphqlgen:x64-windows-static
-```
+[CMake](https://cmake.org/) and [vcpkg](https://github.com/microsoft/vcpkg) installed, the versions included
+with Visual Studio 2022 work fine.
 
 You will need to set an environment variable to tell [build.rs](./build.rs) where to find it, or install the
 user-wide vcpkg integration before building this crate. In this example, I have `vcpkg` in a subdirectory
