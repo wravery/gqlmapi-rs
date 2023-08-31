@@ -12,7 +12,7 @@ categories = ["os::windows-apis"]
 cxx = "1.0.62"
 
 [dependencies.windows]
-version = "0.37.0"
+version = "0.51.1"
 features = [
     "Win32_Foundation",
     "Win32_System_Threading",

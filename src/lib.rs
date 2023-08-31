@@ -44,6 +44,8 @@ impl Service {
         let (tx_thread_id, rx_thread_id) = mpsc::channel();
         let (tx_command, rx_command) = mpsc::channel();
         let worker = Some(thread::spawn(move || {
+            Self::ensure_message_queue();
+
             let thread_id = unsafe { GetCurrentThreadId() };
             tx_thread_id
                 .send(thread_id)
@@ -120,7 +122,16 @@ impl Service {
     }
 
     fn kick_pump(thread_id: u32) {
-        unsafe { PostThreadMessageA(thread_id, WM_APP, WPARAM::default(), LPARAM::default()) };
+        unsafe {
+            PostThreadMessageA(thread_id, WM_APP, WPARAM::default(), LPARAM::default())
+                .expect("PostThreadMessageA failed");
+        }
+    }
+
+    fn ensure_message_queue() {
+        let mut msg = MSG::default();
+        let hwnd = HWND::default();
+        unsafe { PeekMessageA(&mut msg, hwnd, WM_USER, WM_USER, PM_NOREMOVE) };
     }
 
     fn wait_with_pump<T>(rx: &mpsc::Receiver<T>) -> Result<T, String> {
