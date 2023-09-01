@@ -144,11 +144,13 @@ impl JsonValue {
         Ok(Box::new(Self(Some(value))))
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn to_json(&mut self) -> Result<String, serde_json::Error> {
         let value = self.0.take().unwrap_or(Value::Null);
         serde_json::to_string(&value)
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn into_value(&mut self) -> Result<cxx::UniquePtr<ffi::ResponseValue>, String> {
         let value = JsonValue(self.0.take());
         value.try_into()
