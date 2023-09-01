@@ -77,20 +77,13 @@ fn main() -> io::Result<()> {
             "graphqlservice",
             "graphqlpeg",
             "graphqlresponse",
-            "graphqljson",
         ];
 
         for lib in cpp_libs {
             println!("cargo:rustc-link-lib=static={}", lib);
         }
     } else {
-        let cpp_dlls = [
-            "gqlmapi",
-            "graphqlservice",
-            "graphqlpeg",
-            "graphqlresponse",
-            "graphqljson",
-        ];
+        let cpp_dlls = ["gqlmapi", "graphqlservice", "graphqlpeg", "graphqlresponse"];
         for dll in cpp_dlls {
             println!("cargo:rustc-link-lib=dylib={}", dll);
         }
@@ -109,6 +102,11 @@ fn main() -> io::Result<()> {
         .flag_if_supported("/EHsc")
         .static_crt(vcpkg_static)
         .compile("gqlmapi-rs");
+
+    println!("cargo:rerun-if-changed=src/bindings.rs");
+    println!("cargo:rerun-if-changed=src/Bindings.cpp");
+    println!("cargo:rerun-if-changed=include/Bindings.h");
+    println!("cargo:rerun-if-changed=include/ResponseTypes.h");
 
     Ok(())
 }

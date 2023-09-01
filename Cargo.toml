@@ -10,6 +10,8 @@ categories = ["os::windows-apis"]
 
 [dependencies]
 cxx = "1.0.62"
+serde = "1.0.133"
+serde_json = { version = "1.0.74", features = ["preserve_order"] }
 
 [dependencies.windows]
 version = "0.51.1"
