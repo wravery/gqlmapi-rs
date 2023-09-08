@@ -47,6 +47,7 @@ fn main() -> io::Result<()> {
         .define("VCPKG_TARGET_TRIPLET", &vcpkg_triplet)
         .define("BUILD_SHARED_LIBS", if vcpkg_static { "OFF" } else { "ON" })
         .define("BUILD_TESTING", "OFF")
+        .define("IMPLICIT_GRAPHQLJSON_DEPENDENCY", "OFF")
         .cxxflag("/EHsc")
         .generator("Ninja")
         .profile("RelWithDebInfo")
