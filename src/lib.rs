@@ -123,7 +123,7 @@ impl Service {
 
     fn kick_pump(thread_id: u32) {
         unsafe {
-            PostThreadMessageA(thread_id, WM_APP, WPARAM::default(), LPARAM::default())
+            PostThreadMessageW(thread_id, WM_APP, WPARAM::default(), LPARAM::default())
                 .expect("PostThreadMessageA failed");
         }
     }
@@ -131,7 +131,7 @@ impl Service {
     fn ensure_message_queue() {
         let mut msg = MSG::default();
         let hwnd = HWND::default();
-        unsafe { PeekMessageA(&mut msg, hwnd, WM_USER, WM_USER, PM_NOREMOVE) };
+        unsafe { PeekMessageW(&mut msg, hwnd, WM_USER, WM_USER, PM_NOREMOVE) };
     }
 
     fn wait_with_pump<T>(rx: &mpsc::Receiver<T>) -> Result<T, String> {
@@ -144,7 +144,7 @@ impl Service {
             }
 
             unsafe {
-                match GetMessageA(&mut msg, hwnd, 0, 0).0 {
+                match GetMessageW(&mut msg, hwnd, 0, 0).0 {
                     -1 => {
                         return Err(format!(
                             "GetMessageA error: {}",
@@ -154,7 +154,7 @@ impl Service {
                     0 => return Err(String::from("Cancelled")),
                     _ => {
                         TranslateMessage(&msg);
-                        DispatchMessageA(&msg);
+                        DispatchMessageW(&msg);
                     }
                 }
             }
